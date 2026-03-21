@@ -27,7 +27,7 @@ func (h *MovieHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	movies, err := h.Service.BuscarFilmes(genero, streaming)
+	movies, err := h.Service.BuscarFilmes([]int{genero}, []int{streaming})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return

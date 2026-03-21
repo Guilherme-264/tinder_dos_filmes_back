@@ -3,22 +3,27 @@ package handlers
 import (
 	"TinderDosFilmes/internal/models"
 	"TinderDosFilmes/internal/services"
+	"database/sql"
 	"encoding/json"
+	"log"
 	"math/rand"
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/lib/pq"
 )
 
 type SalaHandler struct {
 	Service *services.TMDBService
+	DB      *sql.DB
 }
 
 var salas = map[string]models.Sala{}
 
 type CriarSalaRequest struct {
-	Genero    int `json:"genero"`
-	Streaming int `json:"streaming"`
+	Generos    []int `json:"generos"`
+	Streamings []int `json:"streaming"`
 }
 
 type CriarSalaResponse struct {
@@ -36,27 +41,41 @@ func gerarCodigoSala() string {
 
 func (h *SalaHandler) CriarSala(w http.ResponseWriter, r *http.Request) {
 	var req CriarSalaRequest
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "JSON inválido", http.StatusBadRequest)
 		return
 	}
 
-	filmes, err := h.Service.BuscarFilmes(req.Genero, req.Streaming)
+	filmes, err := h.Service.BuscarFilmes(req.Generos, req.Streamings)
 	if err != nil {
 		http.Error(w, "Erro ao buscar filmes", http.StatusInternalServerError)
 		return
 	}
 
 	codigo := gerarCodigoSala()
-
 	sala := models.Sala{
-		ID:        codigo,
-		Genero:    req.Genero,
-		Streaming: req.Streaming,
-		Filmes:    filmes,
-		CriadaEm:  time.Now(),
-		ExpiraEm:  time.Now().Add(2 * time.Hour),
+		ID:         codigo,
+		Generos:    req.Generos,
+		Streamings: req.Streamings,
+		Filmes:     filmes,
+		CriadaEm:   time.Now(),
+		ExpiraEm:   time.Now().Add(2 * time.Hour),
+		Status:     "lobby",
+	}
+
+	_, err = h.DB.Exec(
+		`INSERT INTO salas (id, generos, streamings, criado_em, status)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		sala.ID,
+		pq.Array(sala.Generos),
+		pq.Array(sala.Streamings),
+		sala.CriadaEm,
+		sala.Status,
+	)
+	if err != nil {
+		log.Printf("Erro ao salvar sala: %v", err)
+		http.Error(w, "Erro ao salvar sala", http.StatusInternalServerError)
+		return
 	}
 
 	salas[codigo] = sala
@@ -87,8 +106,8 @@ func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"id": sala.ID,
 				"filtros": map[string]interface{}{
-					"generos":    []int{sala.Genero},
-					"streamings": []int{sala.Streaming},
+					"generos":    sala.Generos,
+					"streamings": sala.Streamings,
 				},
 				"participantes": []interface{}{},
 				"status":        "lobby",
