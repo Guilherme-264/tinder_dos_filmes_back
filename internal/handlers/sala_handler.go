@@ -23,7 +23,7 @@ var salas = map[string]models.Sala{}
 
 type CriarSalaRequest struct {
 	Generos    []int `json:"generos"`
-	Streamings []int `json:"streaming"`
+	Streamings []int `json:"streamings"`
 }
 
 type CriarSalaResponse struct {
