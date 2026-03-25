@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/lib/pq"
@@ -19,7 +20,10 @@ type SalaHandler struct {
 	DB      *sql.DB
 }
 
-var salas = map[string]models.Sala{}
+var (
+	salas   = map[string]models.Sala{}
+	salasMu sync.RWMutex
+)
 
 type CriarSalaRequest struct {
 	Generos    []int `json:"generos"`
@@ -78,10 +82,34 @@ func (h *SalaHandler) CriarSala(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	salasMu.Lock()
 	salas[codigo] = sala
+	salasMu.Unlock()
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(CriarSalaResponse{SalaID: codigo})
+}
+
+func (h *SalaHandler) ApagarSalas() {
+	agora := time.Now()
+	salasMu.Lock()
+	defer salasMu.Unlock()
+
+	for id, sala := range salas {
+		if agora.After(sala.ExpiraEm) {
+			delete(salas, id)
+
+			_, err := h.DB.Exec(`DELETE FROM salas WHERE id = $1`, id)
+			if err != nil {
+				log.Printf("Erro ao apagar sala %s do banco: %v", id, err)
+			} else {
+				log.Printf("Sala %s expirada e removida", id)
+			}
+
+		}
+
+	}
+
 }
 
 func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
@@ -93,7 +121,10 @@ func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parts[0]
 
+	salasMu.RLock()
 	sala, ok := salas[id]
+	salasMu.RUnlock()
+
 	if !ok {
 		http.NotFound(w, r)
 		return

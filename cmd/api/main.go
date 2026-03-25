@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 )
 
 func main() {
@@ -48,7 +49,12 @@ func main() {
 			h(w, r)
 		}
 	}
-
+	go func() {
+		for {
+			time.Sleep(10 * time.Second)
+			salaHandler.ApagarSalas()
+		}
+	}()
 	http.HandleFunc("/discover", withCORS(movieHandler.Discover))
 	http.HandleFunc("/sala", withCORS(salaHandler.CriarSala))
 	http.HandleFunc("/sala/", withCORS(salaHandler.Sala))
