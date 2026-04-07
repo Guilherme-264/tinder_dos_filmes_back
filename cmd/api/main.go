@@ -58,6 +58,7 @@ func main() {
 	http.HandleFunc("/discover", withCORS(movieHandler.Discover))
 	http.HandleFunc("/sala", withCORS(salaHandler.CriarSala))
 	http.HandleFunc("/sala/", withCORS(salaHandler.Sala))
+	http.HandleFunc("/ws/sala/", salaHandler.WSHandler)
 
 	port := os.Getenv("PORT")
 	if port == "" {

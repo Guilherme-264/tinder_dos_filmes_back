@@ -52,7 +52,6 @@ func (s *TMDBService) BuscarFilmes(generos, streamings []int) ([]models.Filme, e
 				}
 
 				body, _ := io.ReadAll(resp.Body)
-				log.Printf("Resposta TMDB: %s", string(body))
 				resp.Body.Close()
 
 				var discover DiscoverResponse
@@ -81,7 +80,6 @@ func (s *TMDBService) BuscarFilmes(generos, streamings []int) ([]models.Filme, e
 	if todosFilmes == nil {
 		todosFilmes = []models.Filme{}
 	}
-	log.Printf("Total de filmes: %d", len(todosFilmes))
 
 	return todosFilmes, nil
 }
