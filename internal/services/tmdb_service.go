@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand"
 	"net/http"
-	"strconv"
 )
 
 type DiscoverResponse struct {
@@ -20,66 +20,118 @@ type TMDBService struct {
 	ApiKey string
 }
 
-func (s *TMDBService) BuscarFilmes(generos, streamings []int) ([]models.Filme, error) {
-	log.Printf("generos: %v, streamings: %v", generos, streamings)
+func (s *TMDBService) BuscarFilmes(generos []int, streamings []int) ([]models.Filme, error) {
+	const LIMITE_TOTAL = 100
 
-	if s.ApiKey == "" {
-		return nil, errors.New("TMDB API key não configurada")
+	type combinacao struct {
+		genero    int
+		streaming int
 	}
 
-	var todosFilmes []models.Filme
+	combinacoes := []combinacao{}
+	for _, g := range generos {
+		for _, st := range streamings {
+			combinacoes = append(combinacoes, combinacao{g, st})
+		}
+	}
+
+	if len(combinacoes) == 0 {
+		return []models.Filme{}, nil
+	}
+
+	porCombinacao := LIMITE_TOTAL / len(combinacoes)
+	if porCombinacao < 1 {
+		porCombinacao = 1
+	}
+
+	type resultado struct {
+		filmes []models.Filme
+		err    error
+	}
+
+	// dispara todas as requests em paralelo
+	ch := make(chan resultado, len(combinacoes))
+	for _, c := range combinacoes {
+		go func(g, st int) {
+			filmes, err := s.buscarComLimite(g, st, porCombinacao)
+			ch <- resultado{filmes, err}
+		}(c.genero, c.streaming)
+	}
+
+	// coleta resultados
 	vistos := map[int]bool{}
+	todos := []models.Filme{}
 
-	for _, streaming := range streamings {
-		for _, genero := range generos {
-			for pagina := 1; pagina <= 5; pagina++ {
-				url := "https://api.themoviedb.org/3/discover/movie?api_key=" + s.ApiKey +
-					"&language=pt-BR" +
-					"&with_genres=" + strconv.Itoa(genero) +
-					"&with_watch_providers=" + strconv.Itoa(streaming) +
-					"&watch_region=BR" +
-					"&page=" + strconv.Itoa(pagina)
-
-				resp, err := http.Get(url)
-				if err != nil {
-					return nil, err
-				}
-				log.Printf("Buscando: %s", url)
-
-				if resp.StatusCode != http.StatusOK {
-					body, _ := io.ReadAll(resp.Body)
-					return nil, fmt.Errorf("TMDB erro status %d: %s", resp.StatusCode, string(body))
-				}
-
-				body, _ := io.ReadAll(resp.Body)
-				resp.Body.Close()
-
-				var discover DiscoverResponse
-				if err := json.Unmarshal(body, &discover); err != nil {
-					return nil, err
-				}
-				resp.Body.Close() // fecha aqui, não com defer
-
-				for _, f := range discover.Results {
-					if !vistos[f.ID] {
-						vistos[f.ID] = true
-						f.Streaming = []int{streaming}
-						todosFilmes = append(todosFilmes, f)
-					}
-				}
-
-				if pagina >= discover.TotalPages {
-					break
-				}
-				log.Printf("Página %d: %d filmes encontrados", pagina, len(discover.Results))
-
+	for range combinacoes {
+		res := <-ch
+		if res.err != nil {
+			log.Printf("Erro ao buscar filmes: %v", res.err)
+			continue
+		}
+		for _, f := range res.filmes {
+			if !vistos[f.ID] {
+				vistos[f.ID] = true
+				todos = append(todos, f)
 			}
 		}
 	}
 
-	if todosFilmes == nil {
-		todosFilmes = []models.Filme{}
+	rand.Shuffle(len(todos), func(i, j int) {
+		todos[i], todos[j] = todos[j], todos[i]
+	})
+
+	if len(todos) > LIMITE_TOTAL {
+		todos = todos[:LIMITE_TOTAL]
 	}
 
-	return todosFilmes, nil
+	return todos, nil
+}
+
+func (s *TMDBService) buscarComLimite(genero, streaming, limite int) ([]models.Filme, error) {
+	if s.ApiKey == "" {
+		return nil, errors.New("TMDB API key não configurada")
+	}
+
+	filmes := []models.Filme{}
+	pagina := 1
+
+	for len(filmes) < limite {
+		url := fmt.Sprintf(
+			"https://api.themoviedb.org/3/discover/movie?api_key=%s&language=pt-BR&with_genres=%d&with_watch_providers=%d&watch_region=BR&page=%d",
+			s.ApiKey, genero, streaming, pagina,
+		)
+
+		resp, err := http.Get(url)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(resp.Body)
+			return nil, fmt.Errorf("TMDB erro status %d: %s", resp.StatusCode, string(body))
+		}
+
+		var discover DiscoverResponse
+		if err := json.NewDecoder(resp.Body).Decode(&discover); err != nil {
+			return nil, err
+		}
+
+		if len(discover.Results) == 0 {
+			break
+		}
+
+		filmes = append(filmes, discover.Results...)
+		pagina++
+
+		if pagina > discover.TotalPages {
+			break
+		}
+	}
+
+	if len(filmes) > limite {
+		filmes = filmes[:limite]
+	}
+
+	return filmes, nil
 }

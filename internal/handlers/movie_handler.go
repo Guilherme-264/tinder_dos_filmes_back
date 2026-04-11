@@ -20,7 +20,6 @@ func (h *MovieHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "genero inválido", http.StatusBadRequest)
 		return
 	}
-
 	streaming, err := strconv.Atoi(streamingStr)
 	if err != nil {
 		http.Error(w, "streaming inválido", http.StatusBadRequest)
