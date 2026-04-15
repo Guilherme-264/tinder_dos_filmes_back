@@ -1,0 +1,39 @@
+services:
+  - type: web
+    name: movie-tinder-api
+    runtime: go
+    buildCommand: go build -o main ./cmd/main.go
+    startCommand: ./main
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: movie-tinder-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: movie-tinder-db
+          property: port
+      - key: DB_USER
+        fromDatabase:
+          name: movie-tinder-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: movie-tinder-db
+          property: password
+      - key: DB_NAME
+        fromDatabase:
+          name: movie-tinder-db
+          property: database
+      - key: TMDB_API_KEY
+        sync: false
+      - key: PORT
+        value: 10000
+      - key: GO_ENV
+        value: production
+
+databases:
+  - name: movie-tinder-db
+    plan: free
+    databaseName: movietinder
+    user: movietinder
