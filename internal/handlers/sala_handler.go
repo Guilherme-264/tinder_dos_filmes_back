@@ -16,8 +16,9 @@ import (
 )
 
 type SalaHandler struct {
-	Service *services.TMDBService
-	DB      *sql.DB
+	Service      *services.TMDBService
+	FilmeService *services.FilmeService
+	DB           *sql.DB
 }
 
 var (
@@ -50,7 +51,7 @@ func (h *SalaHandler) CriarSala(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filmes, err := h.Service.BuscarFilmes(req.Generos, req.Streamings)
+	filmes, err := h.FilmeService.BuscarFilmes(req.Generos, req.Streamings)
 	if err != nil {
 		http.Error(w, "Erro ao buscar filmes", http.StatusInternalServerError)
 		return

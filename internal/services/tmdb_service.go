@@ -23,7 +23,7 @@ type TMDBService struct {
 }
 
 // Busca filmes de um gênero + streaming específico
-func (s *TMDBService) buscarPorGeneroStreaming(genero, streaming, pagina int) ([]models.Filme, error) {
+func (s *TMDBService) BuscarPorGeneroStreaming(genero, streaming, pagina int) ([]models.Filme, error) {
 	url := "https://api.themoviedb.org/3/discover/movie?api_key=" + s.ApiKey +
 		"&language=pt-BR" +
 		"&with_genres=" + strconv.Itoa(genero) +
@@ -85,7 +85,7 @@ func (s *TMDBService) BuscarFilmes(generos, streamings []int) ([]models.Filme, e
 		// Busca páginas até atingir a quantidade alvo
 		for pagina := 1; pagina <= 5 && len(filmesDoGenero) < qtdAlvo; pagina++ {
 			for _, streaming := range streamings {
-				filmes, err := s.buscarPorGeneroStreaming(genero, streaming, pagina)
+				filmes, err := s.BuscarPorGeneroStreaming(genero, streaming, pagina)
 				if err != nil {
 					log.Printf("Erro ao buscar genero %d streaming %d: %v", genero, streaming, err)
 					continue

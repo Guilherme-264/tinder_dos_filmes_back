@@ -33,11 +33,13 @@ func main() {
 	movieHandler := &handlers.MovieHandler{
 		Service: tmdbService,
 	}
-	salaHandler := &handlers.SalaHandler{
-		Service: tmdbService,
-		DB:      db,
-	}
+	filmeService := &services.FilmeService{DB: db}
 
+	salaHandler := &handlers.SalaHandler{
+		Service:      tmdbService,  // ainda usado em outros lugares
+		FilmeService: filmeService, // novo, para criar salas
+		DB:           db,
+	}
 	withCORS := func(h http.HandlerFunc) http.HandlerFunc {
 		return func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Access-Control-Allow-Origin", "*")
