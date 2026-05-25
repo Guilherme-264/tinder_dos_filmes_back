@@ -2,7 +2,7 @@ services:
   - type: web
     name: movie-tinder-api
     runtime: go
-    buildCommand: go build -o main ./cmd/main.go
+    buildCommand: go build -o main ./cmd/api/main.go
     startCommand: ./main
     envVars:
       - key: DB_HOST
