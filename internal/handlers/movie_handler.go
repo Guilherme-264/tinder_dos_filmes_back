@@ -20,14 +20,13 @@ func (h *MovieHandler) Discover(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "genero inválido", http.StatusBadRequest)
 		return
 	}
-
 	streaming, err := strconv.Atoi(streamingStr)
 	if err != nil {
 		http.Error(w, "streaming inválido", http.StatusBadRequest)
 		return
 	}
 
-	movies, err := h.Service.BuscarFilmes(genero, streaming)
+	movies, err := h.Service.BuscarFilmes([]int{genero}, []int{streaming})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
