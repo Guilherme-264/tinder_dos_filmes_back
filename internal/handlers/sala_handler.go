@@ -25,6 +25,11 @@ type CriarSalaResponse struct {
 	SalaID string `json:"salaId"`
 }
 
+type AtualizarApelidoRequest struct {
+	UserID  string `json:"userId"`
+	Apelido string `json:"apelido"`
+}
+
 func gerarCodigoSala() string {
 	const letras = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	codigo := make([]byte, 6)
@@ -83,6 +88,13 @@ func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
 	switch r.Method {
 	case http.MethodGet:
 		if len(parts) == 1 {
+			participantes := []Jogador{}
+			if hub, existe := getHub(id); existe {
+				hub.mu.RLock()
+				participantes = hub.Jogadores()
+				hub.mu.RUnlock()
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			json.NewEncoder(w).Encode(map[string]interface{}{
 				"id": sala.ID,
@@ -90,8 +102,10 @@ func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
 					"generos":    []int{sala.Genero},
 					"streamings": []int{sala.Streaming},
 				},
-				"participantes": []interface{}{},
-				"status":        "lobby",
+				"participantes":  participantes,
+				"jogadores":      participantes,
+				"totalJogadores": len(participantes),
+				"status":         "lobby",
 			})
 			return
 		}
@@ -106,6 +120,38 @@ func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
 			json.NewEncoder(w).Encode(map[string]string{
 				"userId": "1",
 				"token":  "fake-token",
+			})
+			return
+		}
+		if len(parts) == 2 && parts[1] == "apelido" {
+			var req AtualizarApelidoRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				http.Error(w, "JSON invÃ¡lido", http.StatusBadRequest)
+				return
+			}
+
+			req.Apelido = limparApelido(req.Apelido)
+			if req.UserID == "" {
+				http.Error(w, "userId obrigatÃ³rio", http.StatusBadRequest)
+				return
+			}
+
+			hub, existe := getHub(id)
+			if !existe {
+				http.Error(w, "Jogador nÃ£o conectado", http.StatusNotFound)
+				return
+			}
+
+			hub.AtualizarApelido(req.UserID, req.Apelido)
+			hub.Broadcast(montarMensagem("jogador_atualizado", map[string]string{
+				"userId":  req.UserID,
+				"apelido": req.Apelido,
+			}))
+
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]string{
+				"userId":  req.UserID,
+				"apelido": req.Apelido,
 			})
 			return
 		}
