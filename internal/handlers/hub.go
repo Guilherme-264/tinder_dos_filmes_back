@@ -47,6 +47,14 @@ func getOrCreateHub(salaID string) *Hub {
 	return h
 }
 
+func getHub(salaID string) (*Hub, bool) {
+	hubsMu.RLock()
+	defer hubsMu.RUnlock()
+
+	h, ok := hubs[salaID]
+	return h, ok
+}
+
 func (h *Hub) Broadcast(msg []byte) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
