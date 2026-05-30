@@ -21,6 +21,33 @@ type WSMessage struct {
 	Payload json.RawMessage `json:"payload"`
 }
 
+type apelidoPayload struct {
+	Apelido string `json:"apelido"`
+}
+
+func limparApelido(apelido string) string {
+	apelido = strings.TrimSpace(apelido)
+	if apelido == "" {
+		return "Jogador"
+	}
+
+	runes := []rune(apelido)
+	if len(runes) > 24 {
+		return string(runes[:24])
+	}
+
+	return apelido
+}
+
+func montarMensagem(tipo string, payload interface{}) []byte {
+	payloadJSON, _ := json.Marshal(payload)
+	msg, _ := json.Marshal(WSMessage{
+		Tipo:    tipo,
+		Payload: payloadJSON,
+	})
+	return msg
+}
+
 func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 	path := strings.TrimPrefix(r.URL.Path, "/ws/sala/")
 	salaID := strings.Split(path, "/")[0]
@@ -44,11 +71,13 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 	if userID == "" {
 		userID = gerarCodigoSala()
 	}
+	apelido := limparApelido(r.URL.Query().Get("apelido"))
 
 	cliente := &Cliente{
-		ID:   userID,
-		Conn: conn,
-		Send: make(chan []byte, 64),
+		ID:      userID,
+		Apelido: apelido,
+		Conn:    conn,
+		Send:    make(chan []byte, 64),
 	}
 
 	hub := getOrCreateHub(salaID)
@@ -58,35 +87,22 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 		close(clienteAntigo.Send)
 	}
 	hub.Clientes[userID] = cliente
-
-	// monta lista de IDs
-	ids := make([]string, 0, len(hub.Clientes))
-	for id := range hub.Clientes {
-		ids = append(ids, id)
-	}
 	totalAtual := len(hub.Clientes)
+	jogadores := hub.Jogadores()
 	hub.mu.Unlock()
 
-	listaPayload, _ := json.Marshal(map[string]interface{}{
+	cliente.Send <- montarMensagem("sala_atual", map[string]interface{}{
 		"userId":    userID,
 		"total":     totalAtual,
-		"jogadores": ids,
+		"jogadores": jogadores,
 	})
-	listaMsg, _ := json.Marshal(WSMessage{
-		Tipo:    "sala_atual",
-		Payload: listaPayload,
-	})
-	cliente.Send <- listaMsg
 
-	// broadcast para todos que alguém entrou
-	entrouPayload, _ := json.Marshal(map[string]string{"userId": userID})
-	entrouMsg, _ := json.Marshal(WSMessage{
-		Tipo:    "jogador_entrou",
-		Payload: entrouPayload,
-	})
-	hub.Broadcast(entrouMsg)
+	hub.Broadcast(montarMensagem("jogador_entrou", map[string]string{
+		"userId":  userID,
+		"apelido": apelido,
+		"status":  "entrou",
+	}))
 
-	// goroutine para escrever mensagens
 	go func() {
 		defer conn.Close()
 		for msg := range cliente.Send {
@@ -97,7 +113,6 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// cleanup ao desconectar
 	defer func() {
 		hub.mu.Lock()
 		delete(hub.Clientes, userID)
@@ -105,15 +120,12 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 		close(cliente.Send)
 		conn.Close()
 
-		saiuPayload, _ := json.Marshal(map[string]string{"userId": userID})
-		saiuMsg, _ := json.Marshal(WSMessage{
-			Tipo:    "jogador_saiu",
-			Payload: saiuPayload,
-		})
-		hub.Broadcast(saiuMsg)
+		hub.Broadcast(montarMensagem("jogador_saiu", map[string]string{
+			"userId": userID,
+			"status": "saiu",
+		}))
 	}()
 
-	// loop de leitura
 	for {
 		_, raw, err := conn.ReadMessage()
 		if err != nil {
@@ -126,8 +138,19 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		switch msg.Tipo {
-		case "voto":
+		case "apelido":
+			var payload apelidoPayload
+			if err := json.Unmarshal(msg.Payload, &payload); err != nil {
+				continue
+			}
 
+			apelido = limparApelido(payload.Apelido)
+			hub.AtualizarApelido(userID, apelido)
+			hub.Broadcast(montarMensagem("jogador_atualizado", map[string]string{
+				"userId":  userID,
+				"apelido": apelido,
+			}))
+		case "voto":
 			var voto Voto
 			if err := json.Unmarshal(msg.Payload, &voto); err != nil {
 				continue
@@ -139,13 +162,7 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 			hub.mu.RUnlock()
 
 			isMatch := hub.RegistrarVoto(voto, totalJogadores)
-
-			votoPayload, _ := json.Marshal(voto)
-			votoMsg, _ := json.Marshal(WSMessage{
-				Tipo:    "voto_registrado",
-				Payload: votoPayload,
-			})
-			hub.Broadcast(votoMsg)
+			hub.Broadcast(montarMensagem("voto_registrado", voto))
 
 			if isMatch {
 				var filmeMatch interface{} = nil
@@ -158,19 +175,10 @@ func (h *SalaHandler) WSHandler(w http.ResponseWriter, r *http.Request) {
 				}
 				salasMu.RUnlock()
 
-				matchPayload, _ := json.Marshal(filmeMatch)
-				matchMsg, _ := json.Marshal(WSMessage{
-					Tipo:    "match",
-					Payload: matchPayload,
-				})
-				hub.Broadcast(matchMsg)
+				hub.Broadcast(montarMensagem("match", filmeMatch))
 			}
 		case "iniciar_sala":
-			iniciarMsg, _ := json.Marshal(WSMessage{
-				Tipo:    "sala_iniciada",
-				Payload: json.RawMessage(`{}`),
-			})
-			hub.Broadcast(iniciarMsg)
+			hub.Broadcast(montarMensagem("sala_iniciada", map[string]interface{}{}))
 		}
 	}
 }
