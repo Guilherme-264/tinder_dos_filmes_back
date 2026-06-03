@@ -36,8 +36,8 @@ func main() {
 	filmeService := &services.FilmeService{DB: db}
 
 	salaHandler := &handlers.SalaHandler{
-		Service:      tmdbService,  // ainda usado em outros lugares
-		FilmeService: filmeService, // novo, para criar salas
+		Service:      tmdbService,
+		FilmeService: filmeService,
 		DB:           db,
 	}
 	withCORS := func(h http.HandlerFunc) http.HandlerFunc {

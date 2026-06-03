@@ -21,6 +21,11 @@ func main() {
 		log.Fatal("Erro ao conectar no banco:", err)
 	}
 	defer db.Close()
+	_, err = db.Exec(`TRUNCATE TABLE filmes`)
+	if err != nil {
+		log.Fatal("Erro ao limpar tabela:", err)
+	}
+	log.Println("Tabela filmes limpa!")
 
 	svc := &services.TMDBService{ApiKey: cfg.TMDBApiKey}
 
