@@ -9,4 +9,5 @@ type Filme struct {
 	ReleaseDate string  `json:"release_date"`
 	GenreIDs    []int   `json:"genre_ids"`
 	Streaming   []int   `json:"streaming"`
+	Diretor     string  `json:"diretor,omitempty"`
 }

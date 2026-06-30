@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS filmes (
     poster_path     VARCHAR(255),
     nota_media      NUMERIC(3,1),
     data_lancamento VARCHAR(20),
+    diretor         VARCHAR(255),
     generos         INTEGER[],
     streamings      INTEGER[]
 );

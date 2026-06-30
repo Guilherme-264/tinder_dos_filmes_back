@@ -44,14 +44,20 @@ func main() {
 				}
 
 				for _, f := range filmes {
-					_, err := db.Exec(`
-						INSERT INTO filmes (tmdb_id, titulo, visao_geral, poster_path, nota_media, data_lancamento, generos, streamings)
-						VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+					diretor, err := svc.BuscarDiretores(f.ID)
+					if err != nil {
+						log.Printf("Erro ao buscar diretor do filme %d: %v", f.ID, err)
+					}
+
+					_, err = db.Exec(`
+						INSERT INTO filmes (tmdb_id, titulo, visao_geral, poster_path, nota_media, data_lancamento, diretor, generos, streamings)
+						VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 						ON CONFLICT (tmdb_id) DO UPDATE SET
+							diretor    = COALESCE(NULLIF(EXCLUDED.diretor, ''), filmes.diretor),
 							generos    = (SELECT ARRAY(SELECT DISTINCT unnest(filmes.generos || EXCLUDED.generos))),
 							streamings = (SELECT ARRAY(SELECT DISTINCT unnest(filmes.streamings || EXCLUDED.streamings)))`,
 						f.ID, f.Title, f.Overview, f.PosterPath,
-						f.VoteAverage, f.ReleaseDate,
+						f.VoteAverage, f.ReleaseDate, diretor,
 						pq.Array([]int{genero}),
 						pq.Array([]int{streaming}),
 					)

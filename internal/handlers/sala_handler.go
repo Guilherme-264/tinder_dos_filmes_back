@@ -27,8 +27,12 @@ var (
 )
 
 type CriarSalaRequest struct {
-	Generos    []int `json:"generos"`
-	Streamings []int `json:"streamings"`
+	Generos    []int   `json:"generos"`
+	Streamings []int   `json:"streamings"`
+	AnoInicio  *int    `json:"anoInicio"`
+	AnoFim     *int    `json:"anoFim"`
+	NotaMinima float64 `json:"notaMinima"`
+	Diretor    string  `json:"diretor"`
 }
 
 type CriarSalaResponse struct {
@@ -56,7 +60,14 @@ func (h *SalaHandler) CriarSala(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filmes, err := h.FilmeService.BuscarFilmes(req.Generos, req.Streamings)
+	filmes, err := h.FilmeService.BuscarFilmes(services.FiltrosFilme{
+		Generos:    req.Generos,
+		Streamings: req.Streamings,
+		AnoInicio:  req.AnoInicio,
+		AnoFim:     req.AnoFim,
+		NotaMinima: req.NotaMinima,
+		Diretor:    req.Diretor,
+	})
 	if err != nil {
 		http.Error(w, "Erro ao buscar filmes", http.StatusInternalServerError)
 		return
@@ -67,6 +78,10 @@ func (h *SalaHandler) CriarSala(w http.ResponseWriter, r *http.Request) {
 		ID:         codigo,
 		Generos:    req.Generos,
 		Streamings: req.Streamings,
+		AnoInicio:  req.AnoInicio,
+		AnoFim:     req.AnoFim,
+		NotaMinima: req.NotaMinima,
+		Diretor:    req.Diretor,
 		Filmes:     filmes,
 		CriadaEm:   time.Now(),
 		ExpiraEm:   time.Now().Add(2 * time.Hour),
@@ -74,11 +89,15 @@ func (h *SalaHandler) CriarSala(w http.ResponseWriter, r *http.Request) {
 	}
 
 	_, err = h.DB.Exec(
-		`INSERT INTO salas (id, generos, streamings, criado_em, status)
-		 VALUES ($1, $2, $3, $4, $5)`,
+		`INSERT INTO salas (id, generos, streamings, ano_inicio, ano_fim, nota_minima, diretor, criado_em, status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		sala.ID,
 		pq.Array(sala.Generos),
 		pq.Array(sala.Streamings),
+		sala.AnoInicio,
+		sala.AnoFim,
+		sala.NotaMinima,
+		sala.Diretor,
 		sala.CriadaEm,
 		sala.Status,
 	)
@@ -152,6 +171,10 @@ func (h *SalaHandler) Sala(w http.ResponseWriter, r *http.Request) {
 				"filtros": map[string]interface{}{
 					"generos":    sala.Generos,
 					"streamings": sala.Streamings,
+					"anoInicio":  sala.AnoInicio,
+					"anoFim":     sala.AnoFim,
+					"notaMinima": sala.NotaMinima,
+					"diretor":    sala.Diretor,
 				},
 				"participantes":  participantes,
 				"jogadores":      participantes,

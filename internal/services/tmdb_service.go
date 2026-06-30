@@ -10,12 +10,22 @@ import (
 	"math/rand"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 )
 
 type DiscoverResponse struct {
 	Results    []models.Filme `json:"results"`
 	TotalPages int            `json:"total_pages"`
+}
+
+type CreditsResponse struct {
+	Crew []CrewMember `json:"crew"`
+}
+
+type CrewMember struct {
+	Job  string `json:"job"`
+	Name string `json:"name"`
 }
 
 type TMDBService struct {
@@ -51,6 +61,38 @@ func (s *TMDBService) BuscarPorGeneroStreaming(genero, streaming, pagina int) ([
 	}
 
 	return discover.Results, nil
+}
+
+func (s *TMDBService) BuscarDiretores(filmeID int) (string, error) {
+	url := "https://api.themoviedb.org/3/movie/" + strconv.Itoa(filmeID) + "/credits?api_key=" + s.ApiKey +
+		"&language=pt-BR"
+
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return "", fmt.Errorf("TMDB credits erro status %d: %s", resp.StatusCode, string(body))
+	}
+
+	body, _ := io.ReadAll(resp.Body)
+
+	var credits CreditsResponse
+	if err := json.Unmarshal(body, &credits); err != nil {
+		return "", err
+	}
+
+	diretores := []string{}
+	for _, pessoa := range credits.Crew {
+		if pessoa.Job == "Director" && pessoa.Name != "" {
+			diretores = append(diretores, pessoa.Name)
+		}
+	}
+
+	return strings.Join(diretores, ", "), nil
 }
 
 func (s *TMDBService) BuscarFilmes(generos, streamings []int) ([]models.Filme, error) {
