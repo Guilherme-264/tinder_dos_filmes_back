@@ -99,3 +99,37 @@ func (s *FilmeService) BuscarFilmes(filtros FiltrosFilme) ([]models.Filme, error
 	log.Printf("Filmes encontrados: %d", len(filmes))
 	return filmes, nil
 }
+
+// BuscarDiretores retorna nomes únicos cadastrados nos filmes.
+// Um filme pode ter mais de um diretor separado por vírgula.
+func (s *FilmeService) BuscarDiretores(termo string) ([]string, error) {
+	termo = strings.TrimSpace(termo)
+	if len([]rune(termo)) < 2 {
+		return []string{}, nil
+	}
+
+	rows, err := s.DB.Query(`
+		SELECT DISTINCT TRIM(nome) AS diretor
+		FROM filmes
+		CROSS JOIN LATERAL unnest(string_to_array(COALESCE(diretor, ''), ',')) AS nome
+		WHERE TRIM(nome) <> ''
+		  AND TRIM(nome) ILIKE '%' || $1 || '%'
+		ORDER BY diretor
+		LIMIT 8`, termo)
+	if err != nil {
+		log.Printf("Erro ao buscar diretores: %v", err)
+		return nil, err
+	}
+	defer rows.Close()
+
+	diretores := []string{}
+	for rows.Next() {
+		var diretor string
+		if err := rows.Scan(&diretor); err != nil {
+			return nil, err
+		}
+		diretores = append(diretores, diretor)
+	}
+
+	return diretores, rows.Err()
+}
