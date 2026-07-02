@@ -30,10 +30,11 @@ func main() {
 		ApiKey: cfg.TMDBApiKey,
 	}
 
-	movieHandler := &handlers.MovieHandler{
-		Service: tmdbService,
-	}
 	filmeService := &services.FilmeService{DB: db}
+	movieHandler := &handlers.MovieHandler{
+		Service:      tmdbService,
+		FilmeService: filmeService,
+	}
 
 	salaHandler := &handlers.SalaHandler{
 		Service:      tmdbService,
@@ -58,6 +59,7 @@ func main() {
 		}
 	}()
 	http.HandleFunc("/discover", withCORS(movieHandler.Discover))
+	http.HandleFunc("/diretores", withCORS(movieHandler.Diretores))
 	http.HandleFunc("/sala", withCORS(salaHandler.CriarSala))
 	http.HandleFunc("/sala/", withCORS(salaHandler.Sala))
 	http.HandleFunc("/ws/sala/", salaHandler.WSHandler)
